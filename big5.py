@@ -198,7 +198,9 @@ def main():
         user = st.session_state.user_data
         st.header("第二階段：推薦結果")
         st.write(f"**📍 地區：** {user['selected_city']} | **🎯 主題：** {user['manual_cat_label']}")
-        
+        p = user['personality']
+        st.info(f"人格分析：E({p['E']:.1f}) A({p['A']:.1f}) C({p['C']:.1f}) N({p['N']:.1f}) O({p['O']:.1f})")
+
         if not st.session_state.recs:
             st.warning("⚠️ 找不到符合的景點。")
         else:
