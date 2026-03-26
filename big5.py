@@ -127,10 +127,12 @@ def save_feedback(scores, text):
         
     u = st.session_state.user_data
     p = u['personality']
+    # 修正時區：強制加 8 小時轉為台灣時間
+    tw_time = (datetime.datetime.now() + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     
     # 準備要寫入 Google Sheets 的資料列 (A 到 Q 欄)
     row_data = [
-        datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), # A. 時間
+        tw_time, # A. 時間
         u['name'],                                            # B. User_ID
         u['selected_city'],                                   # C. 篩選縣市
         u['manual_cat_label'],                                # D. 篩選主題
