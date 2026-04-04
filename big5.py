@@ -211,6 +211,7 @@ def main():
         st.divider()
         with st.form("feedback_form"):
             st.subheader("系統使用回饋")
+            pu1 = st.slider("PU1. 系統能幫助我更精準地推薦景點", 1, 5, 3)
             pu2 = st.slider("PU2. 系統能節省我過濾資訊的時間", 1, 5, 3)
             pu3 = st.slider("PU3. 系統能提升我規劃旅遊的效率", 1, 5, 3)
             us1 = st.slider("US1. 我滿意系統推薦的景點準確度", 1, 5, 3)
