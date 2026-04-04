@@ -98,8 +98,9 @@ def process_recommendation(df, user_id, a, manual_cat, selected_city):
     seen = set()
     rank = 1
 
-    plan = [(manual_cat, 3, "自選主題"), (top_cats[0], 3, "人格適配#1"),
-            (top_cats[1], 3, "人格適配#2"), (top_cats[2], 1, "人格適配#3")]
+    # --- 修改點：將 #1, #2, #3 統稱為 "人格適配" ---
+    plan = [(manual_cat, 3, "自選主題"), (top_cats[0], 3, "人格適配"),
+            (top_cats[1], 3, "人格適配"), (top_cats[2], 1, "人格適配")]
 
     for cid, count, lbl in plan:
         pool = work_df[(work_df['類別編號'] == cid) & (~work_df['景點名稱'].isin(seen))]
@@ -133,7 +134,7 @@ def save_feedback(scores, text):
     # 準備要寫入 Google Sheets 的資料列 (A 到 Q 欄)
     row_data = [
         tw_time, # A. 時間
-        u['name'],                                            # B. User_ID
+        u['name'],                                              # B. User_ID
         u['selected_city'],                                   # C. 篩選縣市
         u['manual_cat_label'],                                # D. 篩選主題
         f"{p['E']:.2f}", f"{p['A']:.2f}", f"{p['C']:.2f}",    # E, F, G. 分數
@@ -199,6 +200,10 @@ def main():
     elif st.session_state.step == 2:
         user = st.session_state.user_data
         st.header("第二階段：推薦結果")
+        
+        # --- 修改點：新增給受試者的提醒文字 ---
+        st.info("💡 **本系統的 推薦結果 會優先推薦您 熱門程度較高(評論數) 的景點，代表其旅遊品質經過較多旅客的驗證，再以 Google星級 為次排序。**")
+        
         st.write(f"**📍 地區：** {user['selected_city']} | **🎯 主題：** {user['manual_cat_label']}")
         p = user['personality']
         st.info(f"人格分析：E({p['E']:.1f}) A({p['A']:.1f}) C({p['C']:.1f}) N({p['N']:.1f}) O({p['O']:.1f})")
