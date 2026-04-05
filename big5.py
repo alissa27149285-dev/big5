@@ -182,7 +182,7 @@ def main():
         st.session_state.user_id = f"User_{str(uuid.uuid4())[:8]}"
 
     if st.session_state.step == 1:
-        st.header("第一階段：個性化分析")
+        st.header("第一階段：內容過濾")
         st.info(f"🆔 使用者編號：**{st.session_state.user_id}**")
 
         selected_city = st.selectbox("您想去哪個縣市？", VALID_CITIES)
@@ -208,7 +208,7 @@ def main():
             """)
         # -----------------------------------------------
 
-        st.subheader("人格特質測驗")
+        st.header("第二階段：人格特質測驗")
         questions = [{'id': 'q1', 'text': '1. 趨向於安靜、少言。'}, {'id': 'q2', 'text': '2. 富有同情心、溫柔的人。'}, {'id': 'q3', 'text': '3. 傾向於雜亂無章。'}, {'id': 'q4', 'text': '4. 處事冷靜、能很好地處理壓力。'}, {'id': 'q5', 'text': '5. 對藝術、美學沒什麼興趣。'}, {'id': 'q6', 'text': '6. 很有活力。'}, {'id': 'q7', 'text': '7. 有時對人無理。'}, {'id': 'q8', 'text': '8. 能堅持到任務完成。'}, {'id': 'q9', 'text': '9. 常感到情緒低落、憂鬱。'}, {'id': 'q10', 'text': '10. 有豐富的想像力。'}, {'id': 'q11', 'text': '11. 害羞、內斂。'}, {'id': 'q12', 'text': '12. 待人禮貌、體貼。'}, {'id': 'q13', 'text': '13. 做事有效率、能完成計畫。'}, {'id': 'q14', 'text': '14. 容易感到焦慮。'}, {'id': 'q15', 'text': '15. 對事物有很多好奇心。'}]
         answers = {q['id']: st.slider(q['text'], 1, 5, 3, key=q['id']) for q in questions}
 
@@ -219,7 +219,7 @@ def main():
 
     elif st.session_state.step == 2:
         user = st.session_state.user_data
-        st.header("第二階段：推薦結果")
+        st.header("第三階段：推薦結果")
         
         # --- 修改點：新增給受試者的提醒文字 ---
         st.info("💡 **本系統的「推薦結果」會優先推薦您《熱門程度/評論數》較高的景點，代表其旅遊品質經過較多旅客的驗證，再以《Google星級》為次排序。**")
