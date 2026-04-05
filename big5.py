@@ -169,6 +169,7 @@ def save_feedback(scores, text):
 # --- 3. 主程式介面 ---
 def main():
     st.title("🗺️ 旅遊推薦系統")
+    st.caption("依照地區、主題及人格特質，快速匹配適合您的景點")
 
     df = load_data()
     if df is None:
