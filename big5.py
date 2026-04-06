@@ -173,7 +173,7 @@ def main():
     # --- 步驟 2：顯示推薦結果 (這是一個乾淨的新頁面) ---
     elif st.session_state.step == 2:
         st.header("第二階段：專屬推薦結果")
-        st.info("💡 **本系統優先推薦《熱門程度/評論數》較高且評分優良之景點。**")
+        st.info("💡 **本系統的「推薦結果」會優先推薦您《熱門程度/評論數》較高的景點，代表其旅遊品質經過較多旅客的驗證，再以《Google星級》為次排序。**")
         
         user = st.session_state.user_data
         st.write(f"📍 **地區：** {user['selected_city']} | 🎯 **主題：** {user['manual_cat_label']}")
