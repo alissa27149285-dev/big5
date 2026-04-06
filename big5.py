@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 # --- 設定頁面 ---
 st.set_page_config(page_title="旅遊推薦系統", layout="centered")
 
-# --- 定義標準縣市清單 ---
+# --- 定義標準 22 縣市清單 ---
 VALID_CITIES = [
     "台北市", "新北市", "桃園市", "台中市", "台南市", "高雄市",
     "基隆市", "宜蘭縣", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "屏東縣",
@@ -22,21 +22,43 @@ VALID_CITIES = [
 def load_data():
     try:
         csv_file = 'TAIWAN_FILTERED.csv' 
-        if not os.path.exists(csv_file): return None
+        if not os.path.exists(csv_file):
+            return None
+
         df = pd.read_csv(csv_file, encoding='utf-8-sig')
         df.columns = [c.strip() for c in df.columns]
-        if '城市' in df.columns: df.rename(columns={'城市': '縣市'}, inplace=True)
+
+        if '城市' in df.columns:
+            df.rename(columns={'城市': '縣市'}, inplace=True)
+        elif '縣市' not in df.columns and '地址' in df.columns:
+            def get_city_from_addr(addr):
+                if pd.isna(addr): return None
+                txt = str(addr).replace('臺', '台')
+                for c in VALID_CITIES:
+                    if c in txt: return c
+                return None
+            df['縣市'] = df['地址'].apply(get_city_from_addr)
+
         if '縣市' in df.columns:
             df['縣市'] = df['縣市'].astype(str).str.strip().str.replace('臺', '台')
             df = df[df['縣市'].isin(VALID_CITIES)]
+
         if '類別編號' in df.columns:
             df['類別編號'] = df['類別編號'].astype(str).str.strip()
+
         def clean_num(x):
-            if pd.notnull(x): return int(re.sub(r'\D', '', str(x)) or 0)
+            if pd.notnull(x):
+                return int(re.sub(r'\D', '', str(x)) or 0)
             return 0
-        if '評論數' in df.columns: df['評論數'] = df['評論數'].apply(clean_num)
+        if '評論數' in df.columns:
+            df['評論數'] = df['評論數'].apply(clean_num)
+
         star_col = 'Google 評分' if 'Google 評分' in df.columns else 'Google 星級'
-        df['Star'] = pd.to_numeric(df[star_col], errors='coerce').fillna(0.0)
+        if star_col in df.columns:
+            df['Star'] = pd.to_numeric(df[star_col], errors='coerce').fillna(0.0)
+        else:
+            df['Star'] = 0.0
+
         return df
     except Exception as e:
         st.error(f"資料讀取錯誤: {e}")
@@ -60,6 +82,7 @@ def process_recommendation(df, user_id, a, manual_cat, selected_city):
         'F10': 0.649*E - 0.168*A + 0.144*N - 0.143*O + 0.079*C, 'F11': 0.336*E + 0.605*A - 0.365*C
     }
     top_cats = [x[0] for x in sorted(f_scores.items(), key=lambda x: x[1], reverse=True)]
+
     work_df = df[df['縣市'] == selected_city].copy()
     recs, seen, rank = [], set(), 1
     plan = [(manual_cat, 3, "自選主題"), (top_cats[0], 3, "人格適配"), (top_cats[1], 3, "人格適配"), (top_cats[2], 1, "人格適配")]
@@ -70,76 +93,107 @@ def process_recommendation(df, user_id, a, manual_cat, selected_city):
         sorted_pool = pool.sort_values(by=['評論數', 'Star'], ascending=False).head(count)
         for _, r in sorted_pool.iterrows():
             recs.append({
-                "排名": rank, "來源": lbl, "景點名稱": r['景點名稱'],
-                "縣市": r['縣市'], "評分": r['Star'], "評論數": r['評論數']
+                "排名": rank, "label": lbl, "name": r['景點名稱'],
+                "city": r['縣市'], "star": r['Star'], "reviews": r['評論數']
             })
             seen.add(r['景點名稱'])
             rank += 1
     st.session_state.user_data = {"name": user_id, "personality": {"E":E,"A":A,"C":C,"N":N,"O":O}, "selected_city": selected_city, "manual_cat_label": manual_cat}
     st.session_state.recs = recs
 
-# --- 3. 雲端儲存函式 ---
+# --- 3. 雲端存檔函式 ---
 def save_feedback(scores, text):
     u = st.session_state.user_data
     p = u['personality']
     tw_time = (datetime.datetime.now() + datetime.timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-    row_data = [tw_time, u['name'], u['selected_city'], u['manual_cat_label'], f"{p['E']:.2f}", f"{p['A']:.2f}", f"{p['C']:.2f}", f"{p['N']:.2f}", f"{p['O']:.2f}", scores["PU1"], scores["PU2"], scores["PU3"], scores["US1"], scores["US2"], scores["US3"], text, "|".join([r['景點名稱'] for r in st.session_state.recs])]
+    row_data = [
+        tw_time, u['name'], u['selected_city'], u['manual_cat_label'],
+        f"{p['E']:.2f}", f"{p['A']:.2f}", f"{p['C']:.2f}", f"{p['N']:.2f}", f"{p['O']:.2f}",
+        scores["PU1"], scores["PU2"], scores["PU3"], scores["US1"], scores["US2"], scores["US3"],
+        text, "|".join([r['name'] for r in st.session_state.recs])
+    ]
     try:
         credentials_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(credentials_dict, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         client = gspread.authorize(creds)
         client.open("big5 fb").sheet1.append_row(row_data)
-        st.success("✅ 資料已成功儲存至雲端！")
+        st.success("✅ 回饋已成功同步至 Google 雲端！")
     except Exception as e:
         st.error(f"雲端儲存失敗: {e}")
 
 # --- 4. 主程式介面 ---
 def main():
     st.title("🗺️ 旅遊推薦系統")
+    st.caption("依照地區、主題及人格特質，快速匹配適合您的景點")
+
     df = load_data()
-    if df is None: return
+    if df is None:
+        st.error("❌ 找不到資料檔 `TAIWAN_FILTERED.csv`")
+        return
 
     if 'step' not in st.session_state: st.session_state.step = 1
-    if 'user_id' not in st.session_state: st.session_state.user_id = f"User_{str(uuid.uuid4())[:8]}"
+    if 'recs' not in st.session_state: st.session_state.recs = []
+    if 'user_id' not in st.session_state:
+        st.session_state.user_id = f"User_{str(uuid.uuid4())[:8]}"
 
-    # --- 步驟 1: 測驗與選擇 ---
+    # --- 步驟 1：內容過濾與人格測驗 ---
     if st.session_state.step == 1:
-        st.header("第一階段：人格特質測驗")
+        st.header("第一階段：內容過濾與人格測驗")
+        st.info(f"🆔 使用者編號：**{st.session_state.user_id}**")
         selected_city = st.selectbox("您想去哪個縣市？", VALID_CITIES)
-        cat_options = {"F1": "F1 - 腎上腺素", "F2": "F2 - 自然", "F3": "F3 - 派對", "F4": "F4 - 沙灘", "F5": "F5 - 博物館", "F6": "F6 - 公園", "F7": "F7 - 文化", "F8": "F8 - 運動", "F9": "F9 - 美食", "F10": "F10 - 健康", "F11": "F11 - 現象"}
+        cat_options = {"F1": "F1 - 腎上腺素活動", "F2": "F2 - 荒野自然活動", "F3": "F3 - 派對、音樂與夜生活", "F4": "F4 - 陽光、水與沙灘", "F5": "F5 - 博物館、船遊與觀景點", "F6": "F6 - 主題與動物公園", "F7": "F7 - 文化遺產", "F8": "F8 - 運動與競賽", "F9": "F9 - 美食活動", "F10": "F10 - 健康與福祉", "F11": "F11 - 自然現象"}
         manual_cat = st.selectbox("感興趣的類型：", list(cat_options.keys()), format_func=lambda x: cat_options[x])
 
-        questions = [{'id': 'q1', 'text': '1. 趨向於安靜、少言。'}, {'id': 'q2', 'text': '2. 富有同情心、溫柔的人。'}, {'id': 'q3', 'text': '3. 傾向於雜亂無章。'}, {'id': 'q4', 'text': '4. 處事冷靜、能很好地處理壓力。'}, {'id': 'q5', 'text': '5. 對藝術、美學沒什麼興趣。'}, {'id': 'q6', 'text': '6. 很有活力。'}, {'id': 'q7', 'text': '7. 有時對人無理。'}, {'id': 'q8', 'text': '8. 能堅持到任務完成。'}, {'id': 'q9', 'text': '9. 常感到情緒低落、憂鬱。'}, {'id': 'q10', 'text': '10. 有豐富的想像力。'}, {'id': 'q11', 'text': '11. 害羞、內斂。'}, {'id': 'q12', 'text': '12. 待人禮貌、體貼。'}, {'id': 'q13', 'text': '13. 做事有效率、能完成計畫。'}, {'id': 'q14', 'text': '14. 容易感到焦慮。'}, {'id': 'q15', 'text': '15. 對事物有很多好奇心。'}]
-        answers = {q['id']: st.slider(q['text'], 1, 5, 3, key=f"step1_{q['id']}") for q in questions}
+        with st.expander("💡 點此查看【11 項旅遊主題】詳細定義"):
+            st.markdown("""
+            | 主題代號 | 主題名稱 | 代表活動範例 |
+            | :--- | :--- | :--- |
+            | **F1** | 腎上腺素活動 | 攀岩、賽車、刺激活動。 |
+            | **F2** | 荒野自然活動 | 登山、步道、生態。 |
+            | **F3** | 派對、夜生活 | 音樂節、酒吧、Live House。 |
+            | **F4** | 陽光、沙灘 | 沙灘、水上活動、放鬆。 |
+            | **F5** | 博物館、觀景 | 美術館、觀景台、遊船。 |
+            | **F6** | 主題動物公園 | 動物園、樂園、水族館。 |
+            | **F7** | 文化遺產 | 古蹟、老街、宗教慶典。 |
+            | **F8** | 運動與競賽 | 體育賽事、棒球場。 |
+            | **F9** | 美食活動 | 美食節、夜市、特色餐飲。 |
+            | **F10**| 健康與福祉 | 溫泉、SPA、按摩。 |
+            | **F11**| 自然現象 | 雲海、地質奇觀、火山洞穴。 |
+            """)
 
-        if st.button("🚀 開始分析並推薦結果", type="primary", use_container_width=True):
+        st.subheader("人格特質測驗")
+        questions = [{'id': 'q1', 'text': '1. 趨向於安靜、少言。'}, {'id': 'q2', 'text': '2. 富有同情心、溫柔的人。'}, {'id': 'q3', 'text': '3. 傾向於雜亂無章。'}, {'id': 'q4', 'text': '4. 處事冷靜、能很好地處理壓力。'}, {'id': 'q5', 'text': '5. 對藝術、美學沒什麼興趣。'}, {'id': 'q6', 'text': '6. 很有活力。'}, {'id': 'q7', 'text': '7. 有時對人無理。'}, {'id': 'q8', 'text': '8. 能堅持到任務完成。'}, {'id': 'q9', 'text': '9. 常感到情緒低落、憂鬱。'}, {'id': 'q10', 'text': '10. 有豐富的想像力。'}, {'id': 'q11', 'text': '11. 害羞、內斂。'}, {'id': 'q12', 'text': '12. 待人禮貌、體貼。'}, {'id': 'q13', 'text': '13. 做事有效率、能完成計畫。'}, {'id': 'q14', 'text': '14. 容易感到焦慮。'}, {'id': 'q15', 'text': '15. 對事物有很多好奇心。'}]
+        answers = {q['id']: st.slider(q['text'], 1, 5, 3, key=q['id']) for q in questions}
+
+        if st.button("🚀 開始分析並推薦", type="primary", use_container_width=True):
             process_recommendation(df, st.session_state.user_id, answers, manual_cat, selected_city)
             st.session_state.step = 2
             st.rerun()
 
-    # --- 步驟 2: 顯示推薦結果 (獨立頁面) ---
+    # --- 步驟 2：顯示推薦結果 (這是一個乾淨的新頁面) ---
     elif st.session_state.step == 2:
-        st.header("第二階段：推薦結果")
-        st.success("✨ 分析完成！以下是專屬您的推薦清單。")
+        st.header("第二階段：專屬推薦結果")
+        st.info("💡 **本系統優先推薦《熱門程度/評論數》較高且評分優良之景點。**")
         
         user = st.session_state.user_data
         st.write(f"📍 **地區：** {user['selected_city']} | 🎯 **主題：** {user['manual_cat_label']}")
-        
+        p = user['personality']
+        st.write(f"📊 人格特質分數：E({p['E']:.1f}) A({p['A']:.1f}) C({p['C']:.1f}) N({p['N']:.1f}) O({p['O']:.1f})")
+
         if not st.session_state.recs:
             st.warning("⚠️ 找不到符合的景點。")
         else:
             st.dataframe(pd.DataFrame(st.session_state.recs), hide_index=True, use_container_width=True)
-        
+
         st.divider()
-        if st.button("下一步：填寫系統評價問卷 ➡️", type="primary", use_container_width=True):
+        if st.button("下一步：填寫回饋問卷 ➡️", type="primary", use_container_width=True):
             st.session_state.step = 3
             st.rerun()
 
-    # --- 步驟 3: 填寫回饋問卷 (獨立頁面) ---
+    # --- 步驟 3：系統使用回饋 (獨立頁面) ---
     elif st.session_state.step == 3:
         st.header("第三階段：系統使用回饋")
-        st.info("請根據您剛才看到的推薦結果，填寫以下問卷。")
-        
+        st.info("請根據您剛才看到的推薦清單，填寫以下問卷。")
         with st.form("feedback_form"):
             pu1 = st.slider("PU1. 系統能幫助我更精準地推薦景點", 1, 5, 3)
             pu2 = st.slider("PU2. 系統能節省我過濾資訊的時間", 1, 5, 3)
@@ -149,17 +203,17 @@ def main():
             us3 = st.slider("US3. 整體而言我對此系統感到滿意", 1, 5, 3)
             other_text = st.text_area("其他建議 (選填)：")
 
-            if st.form_submit_button("送出回饋並結束問卷", type="primary", use_container_width=True):
+            if st.form_submit_button("送出回饋並結束", type="primary", use_container_width=True):
                 scores = {"PU1": pu1, "PU2": pu2, "PU3": pu3, "US1": us1, "US2": us2, "US3": us3}
                 save_feedback(scores, other_text)
                 st.session_state.step = 4
                 st.rerun()
 
-    # --- 步驟 4: 結束與感謝 ---
+    # --- 步驟 4：感謝結束 ---
     elif st.session_state.step == 4:
         st.balloons()
-        st.success("✅ 感謝您的參與！資料已成功上傳雲端。")
-        if st.button("🔄 重新開始測試"):
+        st.success("✅ 感謝您的參與，資料已同步至雲端！")
+        if st.button("🔄 重新開始"):
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
 
