@@ -6,16 +6,10 @@ import re
 import uuid
 import gspread
 from google.oauth2.service_account import Credentials
+import streamlit.components.v1 as components # 新增元件用於控制網頁行為
 
 # --- 設定頁面 ---
 st.set_page_config(page_title="旅遊推薦系統", layout="centered")
-
-# --- 定義標準 17 縣市清單 ---
-VALID_CITIES = [
-    "台北市", "新北市", "桃園市", "台中市", "台南市", "高雄市",
-    "基隆市","宜蘭縣", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "屏東縣",
-    "花蓮縣", "台東縣"
-]
 
 # --- 1. 資料讀取 ---
 @st.cache_data
@@ -28,7 +22,6 @@ def load_data():
         if '城市' in df.columns: df.rename(columns={'城市': '縣市'}, inplace=True)
         if '縣市' in df.columns:
             df['縣市'] = df['縣市'].astype(str).str.strip().str.replace('臺', '台')
-            df = df[df['縣市'].isin(VALID_CITIES)]
         if '類別編號' in df.columns:
             df['類別編號'] = df['類別編號'].astype(str).str.strip()
         def clean_num(x):
@@ -69,7 +62,7 @@ def process_recommendation(df, user_id, a, manual_cat, selected_city):
         if pool.empty: continue
         sorted_pool = pool.sort_values(by=['評論數', 'Star'], ascending=False).head(count)
         for _, r in sorted_pool.iterrows():
-            recs.append({"推薦排名": rank, "推薦依據": lbl, "景點名稱": r['景點名稱'], "縣市": r['縣市'], "評分": f"⭐ {r['Star']}", "評論數": r['評論數']})
+            recs.append({"排名": rank, "推薦類別": lbl, "景點名稱": r['景點名稱'], "評分": f"⭐ {r['Star']}", "評論數": r['評論數']})
             seen.add(r['景點名稱'])
             rank += 1
     st.session_state.user_data = {"name": user_id, "personality": {"E":E,"A":A,"C":C,"N":N,"O":O}, "selected_city": selected_city, "manual_cat_label": manual_cat}
@@ -86,70 +79,65 @@ def save_feedback(scores, text):
         creds = Credentials.from_service_account_info(credentials_dict, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
         client = gspread.authorize(creds)
         client.open("big5 fb").sheet1.append_row(row_data)
-        st.success("✅ 資料已成功上傳雲端！")
-    except Exception as e: st.error(f"雲端儲存失敗: {e}")
+        st.success("✅ 資料已上傳雲端！")
+    except Exception as e: st.error(f"儲存失敗: {e}")
 
 # --- 4. 主程式 ---
 def main():
     st.title("🗺️ 旅遊推薦系統")
     df = load_data()
-    if df is None:
-        st.error("❌ 找不到資料檔 `TAIWAN_FILTERED.csv`")
-        return
+    if df is None: return
 
     if 'step' not in st.session_state: st.session_state.step = 1
     if 'user_id' not in st.session_state: st.session_state.user_id = f"User_{str(uuid.uuid4())[:8]}"
 
     if st.session_state.step == 1:
-        st.header("第一階段：背景資料與測驗")
-        selected_city = st.selectbox("您想去哪個縣市？", VALID_CITIES)
+        st.header("第一階段：測驗與條件")
+        selected_city = st.selectbox("縣市", ["台北市", "新北市", "桃園市", "台中市", "台南市", "高雄市", "基隆市", "宜蘭縣", "新竹縣", "苗栗縣", "彰化縣", "南投縣", "雲林縣", "嘉義縣", "屏東縣", "花蓮縣", "台東縣"])
         cat_options = {"F1": "F1 - 腎上腺素", "F2": "F2 - 自然", "F3": "F3 - 派對", "F4": "F4 - 沙灘", "F5": "F5 - 博物館", "F6": "F6 - 公園", "F7": "F7 - 文化", "F8": "F8 - 運動", "F9": "F9 - 美食", "F10": "F10 - 健康", "F11": "F11 - 現象"}
-        manual_cat = st.selectbox("感興趣的類型：", list(cat_options.keys()), format_func=lambda x: cat_options[x])
+        manual_cat = st.selectbox("感興趣類型", list(cat_options.keys()), format_func=lambda x: cat_options[x])
         questions = [{'id': 'q1', 'text': '1. 趨向於安靜、少言。'}, {'id': 'q2', 'text': '2. 富有同情心、溫柔的人。'}, {'id': 'q3', 'text': '3. 傾向於雜亂無章。'}, {'id': 'q4', 'text': '4. 處事冷靜、能很好地處理壓力。'}, {'id': 'q5', 'text': '5. 對藝術、美學沒什麼興趣。'}, {'id': 'q6', 'text': '6. 很有活力。'}, {'id': 'q7', 'text': '7. 有時對人無理。'}, {'id': 'q8', 'text': '8. 能堅持到任務完成。'}, {'id': 'q9', 'text': '9. 常感到情緒低落、憂鬱。'}, {'id': 'q10', 'text': '10. 有豐富的想像力。'}, {'id': 'q11', 'text': '11. 害羞、內斂。'}, {'id': 'q12', 'text': '12. 待人禮貌、體貼。'}, {'id': 'q13', 'text': '13. 做事有效率、能完成計畫。'}, {'id': 'q14', 'text': '14. 容易感到焦慮。'}, {'id': 'q15', 'text': '15. 對事物有很多好奇心。'}]
         answers = {q['id']: st.slider(q['text'], 1, 5, 3, key=q['id']) for q in questions}
-        if st.button("🚀 開始分析並推薦", type="primary", use_container_width=True):
+        if st.button("🚀 生成推薦結果", type="primary"):
             process_recommendation(df, st.session_state.user_id, answers, manual_cat, selected_city)
             st.session_state.step = 2
             st.rerun()
 
     elif st.session_state.step == 2:
-        # --- 強制顯示順序：使用 Container ---
-        result_container = st.container()
-        feedback_container = st.container()
-
-        with result_container:
-            st.header("🏆 專屬您的推薦結果")
-            st.success("分析完成！以下是為您精選的 10 個景點：")
+        # --- 核心修正：強制網頁滾動回頂端 ---
+        components.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
+        
+        # 顯示清單容器
+        with st.container():
+            st.header("🏆 專屬推薦景點")
+            st.success("分析完成！請先查閱下方推薦清單。")
             user = st.session_state.user_data
-            st.write(f"📍 **旅遊地區：** {user['selected_city']} | 🎯 **自選主題：** {user['manual_cat_label']}")
-            if not st.session_state.recs:
-                st.warning("⚠️ 找不到符合條件的景點。")
-            else:
-                st.dataframe(pd.DataFrame(st.session_state.recs), hide_index=True, use_container_width=True)
+            st.write(f"📍 **地區：** {user['selected_city']} | 🎯 **主題：** {user['manual_cat_label']}")
+            st.dataframe(pd.DataFrame(st.session_state.recs), hide_index=True, use_container_width=True)
             
-            st.info("💡 **請查閱上方推薦清單後，滾動至下方填寫使用回饋，謝謝！**")
-            st.markdown("<br><br>", unsafe_allow_html=True) # 增加間距防止視覺混淆
+            st.markdown("---")
+            st.info("💡 **請查閱完畢後，向下滑動填寫最後的使用回饋。**")
 
-        with feedback_container:
-            st.header("📋 系統使用回饋")
+        # 顯示問卷容器
+        with st.container():
+            st.header("📋 系統回饋問卷")
             with st.form("feedback_form"):
-                pu1 = st.slider("PU1. 系統能幫助我更精準地推薦景點", 1, 5, 3)
-                pu2 = st.slider("PU2. 系統能節省我過濾資訊的時間", 1, 5, 3)
-                pu3 = st.slider("PU3. 系統能提升我規劃旅遊的效率", 1, 5, 3)
-                us1 = st.slider("US1. 我滿意系統推薦的景點準確度", 1, 5, 3)
-                us2 = st.slider("US2. 我滿意系統的介面設計與操作流程", 1, 5, 3)
-                us3 = st.slider("US3. 整體而言我對此系統感到滿意", 1, 5, 3)
-                other_text = st.text_area("其他建議 (選填)：")
-                if st.form_submit_button("送出問卷並結束", type="primary", use_container_width=True):
-                    scores = {"PU1": pu1, "PU2": pu2, "PU3": pu3, "US1": us1, "US2": us2, "US3": us3}
-                    save_feedback(scores, other_text)
+                pu1 = st.slider("PU1. 系統能精準推薦景點", 1, 5, 3)
+                pu2 = st.slider("PU2. 節省過濾資訊時間", 1, 5, 3)
+                pu3 = st.slider("PU3. 提升規劃效率", 1, 5, 3)
+                us1 = st.slider("US1. 推薦準確度滿意度", 1, 5, 3)
+                us2 = st.slider("US2. 介面設計滿意度", 1, 5, 3)
+                us3 = st.slider("US3. 整體滿意度", 1, 5, 3)
+                other_text = st.text_area("其他建議")
+                if st.form_submit_button("提交回饋並結束"):
+                    save_feedback({"PU1":pu1,"PU2":pu2,"PU3":pu3,"US1":us1,"US2":us2,"US3":us3}, other_text)
                     st.session_state.step = 3
                     st.rerun()
 
     elif st.session_state.step == 3:
         st.balloons()
-        st.success("✅ 感謝您的參與！")
-        if st.button("🔄 重新開始"):
+        st.success("✅ 感謝參與！")
+        if st.button("重新開始"):
             for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
 
