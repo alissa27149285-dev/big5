@@ -206,7 +206,7 @@ def main():
             us1 = st.slider("US1. 我滿意系統推薦的景點準確度", 1, 5, 3)
             us2 = st.slider("US2. 我滿意系統的介面設計與操作流程", 1, 5, 3)
             us3 = st.slider("US3. 整體而言我對此系統感到滿意", 1, 5, 3)
-            other_text = st.text_area("其他建議 (選填)：")
+            
             
             st.subheader("準確度")
             acc = st.slider("請問在剛才的推薦結果中，有幾項是符合您的需求與期待？ (0~10項)", 0, 10, 5)
