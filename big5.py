@@ -74,12 +74,17 @@ def process_recommendation(df, user_id, a, manual_cat, selected_city):
     O = (a['q10'] + a['q15'] + inv(a['q5'])) / 3
 
     f_scores = {
-        'F1': 0.715*E - 0.320*C, 'F2': 0.404*E + 0.573*A - 0.223*C,
+        'F1': 0.715*E - 0.320*C, 
+        'F2': 0.404*E + 0.573*A - 0.223*C,
         'F3': 0.751*E - 0.050*A + 0.129*N - 0.115*O - 0.108*C,
-        'F4': 0.617*E + 0.076*N - 0.232*O, 'F5': 0.525*A + 0.078*N + 0.078*O - 0.182*C,
-        'F6': 0.790*E - 0.123*A + 0.128*N - 0.204*O - 0.077*C, 'F7': 0.625*A,
-        'F8': 0.717*E - 0.309*A - 0.152*O - 0.150*C, 'F9': 0.459*E + 0.187*A - 0.116*O - 0.089*C,
-        'F10': 0.649*E - 0.168*A + 0.144*N - 0.143*O + 0.079*C, 'F11': 0.336*E + 0.605*A - 0.365*C
+        'F4': 0.617*E + 0.076*N - 0.232*O, 
+        'F5': 0.525*A + 0.078*N + 0.078*O - 0.182*C,
+        'F6': 0.790*E - 0.123*A + 0.128*N - 0.204*O - 0.077*C,
+        'F7': 0.625*A,
+        'F8': 0.717*E - 0.309*A - 0.152*O - 0.150*C, 
+        'F9': 0.459*E + 0.187*A - 0.116*O - 0.089*C,
+        'F10': 0.649*E - 0.168*A + 0.144*N - 0.143*O + 0.079*C, 
+        'F11': 0.336*E + 0.605*A - 0.365*C
     }
     top_cats = [x[0] for x in sorted(f_scores.items(), key=lambda x: x[1], reverse=True)]
 
@@ -202,7 +207,10 @@ def main():
             us2 = st.slider("US2. 我滿意系統的介面設計與操作流程", 1, 5, 3)
             us3 = st.slider("US3. 整體而言我對此系統感到滿意", 1, 5, 3)
             other_text = st.text_area("其他建議 (選填)：")
-
+            
+            st.subheader("準確度")
+            acc = st.slider("請問在剛才的推薦結果中，有幾項是符合您的需求與期待？ (0~10項)", 0, 10, 5)
+            txt = st.text_area("其他建議 (選填)：")
             if st.form_submit_button("送出回饋並結束", type="primary", use_container_width=True):
                 scores = {"PU1": pu1, "PU2": pu2, "PU3": pu3, "US1": us1, "US2": us2, "US3": us3}
                 save_feedback(scores, other_text)
